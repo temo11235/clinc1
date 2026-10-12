@@ -7,3 +7,4 @@
 2. انسخ `.env.example` لملف `.env` وحط فيه `DATABASE_URL`
 3. `npx prisma db push`
 4. `npm run dev`
+
