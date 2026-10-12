@@ -1,98 +1,130 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
+import { DOCTORS, SERVICES, STATUSES, STATUS_META } from "@/lib/constants";
+import { addDays, cairoDateKey, dayRange, fmtDate, fmtTime, isValidDateKey } from "@/lib/time";
+import { BTN, BTN_SOFT, Card, INPUT, Notice, PageHeader, StatusBadge } from "@/components/ui";
 import { createAppointment, updateStatus } from "./actions";
+
+export const dynamic = "force-dynamic";
 
 const errors: Record<string, string> = {
   invalid: "من فضلك اكمل كل البيانات بشكل صحيح",
-  overlap: "الدكتور عنده موعد في نفس الوقت ده",
-};
-
-const statusLabels: Record<string, string> = {
-  SCHEDULED: "مجدول",
-  COMPLETED: "تم",
-  NO_SHOW: "لم يحضر",
-  CANCELLED: "ملغي",
+  overlap: "الدكتور عنده موعد في نفس الوقت ده، اختار وقت تاني",
 };
 
 export default async function AppointmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ date?: string; error?: string; patientId?: string }>;
 }) {
-  const { error } = await searchParams;
+  const sp = await searchParams;
+  const today = cairoDateKey(new Date());
+  const dateKey = sp.date && isValidDateKey(sp.date) ? sp.date : today;
+  const { start, end } = dayRange(dateKey);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const [patients, appointments] = await Promise.all([
-    db.patient.findMany({ orderBy: { fullName: "asc" } }),
+  const [patients, appts] = await Promise.all([
+    db.patient.findMany({ orderBy: { fullName: "asc" }, select: { id: true, fullName: true } }),
     db.appointment.findMany({
-      where: { startsAt: { gte: todayStart } },
+      where: { startsAt: { gte: start, lt: end } },
       include: { patient: true },
       orderBy: { startsAt: "asc" },
-      take: 200,
     }),
   ]);
 
+  const counts = {
+    total: appts.length,
+    done: appts.filter((a) => a.status === "COMPLETED").length,
+    waiting: appts.filter((a) => a.status === "SCHEDULED").length,
+  };
+
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold">المواعيد</h1>
+    <div className="space-y-6">
+      <PageHeader title="المواعيد" subtitle={fmtDate(start)}>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/appointments?date=${addDays(dateKey, -1)}`} className={BTN_SOFT}>اليوم اللي قبله</Link>
+          <Link href={`/appointments?date=${today}`} className={BTN_SOFT}>النهارده</Link>
+          <Link href={`/appointments?date=${addDays(dateKey, 1)}`} className={BTN_SOFT}>اليوم اللي بعده</Link>
+        </div>
+      </PageHeader>
 
-      {error && errors[error] && (
-        <p className="rounded bg-red-100 p-3 text-red-700">{errors[error]}</p>
-      )}
+      <div className="flex flex-wrap gap-3 text-sm">
+        <span className="rounded-full bg-sky-100 px-3 py-1.5 text-sky-700">إجمالي: {counts.total}</span>
+        <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700">تم: {counts.done}</span>
+        <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700">مستنية: {counts.waiting}</span>
+      </div>
 
-      <form action={createAppointment} className="grid gap-3 rounded bg-white p-6 md:grid-cols-2">
-        <select name="patientId" required className="rounded border p-2">
-          <option value="">اختار المريض</option>
-          {patients.map((p) => (
-            <option key={p.id} value={p.id}>{p.fullName}</option>
-          ))}
-        </select>
-        <input name="doctorName" required placeholder="اسم الدكتور" className="rounded border p-2" />
-        <input name="service" required placeholder="الخدمة (كشف، حشو، تنظيف...)" className="rounded border p-2" />
-        <input name="durationMin" type="number" defaultValue={30} min={5} step={5} className="rounded border p-2" />
-        <input name="startsAt" type="datetime-local" required className="rounded border p-2 md:col-span-2" />
-        <button className="rounded bg-blue-600 px-6 py-2 text-white md:col-span-2">حجز الموعد</button>
-      </form>
+      {sp.error && errors[sp.error] && <Notice>{errors[sp.error]}</Notice>}
 
-      <table className="w-full bg-white text-right">
-        <thead>
-          <tr className="border-b">
-            <th className="p-2">الوقت</th>
-            <th className="p-2">المريض</th>
-            <th className="p-2">الدكتور</th>
-            <th className="p-2">الخدمة</th>
-            <th className="p-2">الحالة</th>
-            <th className="p-2">تغيير</th>
-          </tr>
-        </thead>
-        <tbody>
-          {appointments.map((a) => (
-            <tr key={a.id} className="border-b">
-              <td className="p-2" dir="ltr">
-                {a.startsAt.toLocaleString("ar-EG", { dateStyle: "short", timeStyle: "short" })}
-              </td>
-              <td className="p-2">{a.patient.fullName}</td>
-              <td className="p-2">{a.doctorName}</td>
-              <td className="p-2">{a.service}</td>
-              <td className="p-2">{statusLabels[a.status]}</td>
-              <td className="p-2">
-                <form action={updateStatus} className="flex gap-1">
+      <Card>
+        <h2 className="mb-4 font-bold">حجز موعد جديد</h2>
+        <form action={createAppointment} className="grid gap-4 md:grid-cols-2">
+          <select name="patientId" required defaultValue={sp.patientId ?? ""} className={INPUT}>
+            <option value="">اختار المريض</option>
+            {patients.map((p) => (
+              <option key={p.id} value={p.id}>{p.fullName}</option>
+            ))}
+          </select>
+          <select name="doctorName" required className={INPUT}>
+            {DOCTORS.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+          <select name="service" required className={INPUT}>
+            {SERVICES.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <select name="durationMin" defaultValue="30" className={INPUT}>
+            {[30, 45, 60, 90].map((d) => (
+              <option key={d} value={d}>{d} دقيقة</option>
+            ))}
+          </select>
+          <input name="startsAt" type="datetime-local" required defaultValue={`${dateKey}T10:00`} className={`${INPUT} md:col-span-2`} />
+          <div className="md:col-span-2">
+            <button className={BTN}>حجز الموعد</button>
+          </div>
+        </form>
+      </Card>
+
+      <Card>
+        <h2 className="mb-4 font-bold">مواعيد اليوم</h2>
+        {appts.length === 0 ? (
+          <p className="py-8 text-center text-slate-500">مفيش مواعيد في اليوم ده</p>
+        ) : (
+          <div className="space-y-3">
+            {appts.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-100 bg-white p-4">
+                <div className="w-20 rounded-lg bg-teal-50 py-2 text-center text-sm font-bold text-teal-700">
+                  {fmtTime(a.startsAt)}
+                </div>
+                <div className="min-w-40 flex-1">
+                  <Link href={`/patients/${a.patientId}`} className="font-semibold hover:text-teal-700">
+                    {a.patient.fullName}
+                  </Link>
+                  <p className="text-xs text-slate-500">
+                    {a.service} · {a.doctorName} · {a.durationMin} دقيقة
+                  </p>
+                </div>
+                <StatusBadge status={a.status} />
+                <form action={updateStatus} className="flex flex-wrap gap-1.5">
                   <input type="hidden" name="id" value={a.id} />
-                  <button name="status" value="COMPLETED" className="rounded bg-green-600 px-2 text-white">تم</button>
-                  <button name="status" value="NO_SHOW" className="rounded bg-amber-500 px-2 text-white">لم يحضر</button>
-                  <button name="status" value="CANCELLED" className="rounded bg-red-600 px-2 text-white">إلغاء</button>
+                  {STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      name="status"
+                      value={s}
+                      disabled={a.status === s}
+                      className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-40 ${STATUS_META[s].cls}`}
+                    >
+                      {STATUS_META[s].label}
+                    </button>
+                  ))}
                 </form>
-              </td>
-            </tr>
-          ))}
-          {appointments.length === 0 && (
-            <tr>
-              <td colSpan={6} className="p-4 text-center text-slate-500">مفيش مواعيد جاية</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

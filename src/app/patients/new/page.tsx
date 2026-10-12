@@ -1,4 +1,5 @@
 import { createPatient } from "../actions";
+import { BTN, Card, INPUT, Notice, PageHeader } from "@/components/ui";
 
 const errors: Record<string, string> = {
   invalid: "الاسم أو رقم التليفون غير صحيح (لازم يبدأ بـ 01 ويتكون من 11 رقم)",
@@ -13,21 +14,38 @@ export default async function NewPatientPage({
   const { error } = await searchParams;
 
   return (
-    <div className="max-w-xl space-y-4">
-      <h1 className="text-2xl font-bold">إضافة مريض</h1>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <PageHeader title="إضافة مريض" subtitle="سجّل بيانات المريض الأساسية" />
 
-      {error && errors[error] && (
-        <p className="rounded bg-red-100 p-3 text-red-700">{errors[error]}</p>
-      )}
+      {error && errors[error] && <Notice>{errors[error]}</Notice>}
 
-      <form action={createPatient} className="space-y-4 rounded bg-white p-6">
-        <input name="fullName" required placeholder="الاسم الكامل" className="w-full rounded border p-2" />
-        <input name="phone" required placeholder="01XXXXXXXXX" dir="ltr" className="w-full rounded border p-2" />
-        <input name="birthDate" type="date" className="w-full rounded border p-2" />
-        <input name="allergies" placeholder="الحساسية (لو فيه)" className="w-full rounded border p-2" />
-        <textarea name="notes" placeholder="ملاحظات" className="w-full rounded border p-2" />
-        <button className="rounded bg-blue-600 px-6 py-2 text-white">حفظ</button>
-      </form>
+      <Card>
+        <form action={createPatient} className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-600">الاسم الكامل</label>
+            <input name="fullName" required className={INPUT} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">رقم التليفون</label>
+            <input name="phone" required placeholder="01XXXXXXXXX" dir="ltr" className={INPUT} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">تاريخ الميلاد</label>
+            <input name="birthDate" type="date" className={INPUT} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-600">الحساسية</label>
+            <input name="allergies" placeholder="مثال: بنسيلين" className={INPUT} />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-600">ملاحظات</label>
+            <textarea name="notes" rows={3} className={INPUT} />
+          </div>
+          <div className="md:col-span-2">
+            <button className={BTN}>حفظ المريض</button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

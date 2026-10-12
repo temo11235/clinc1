@@ -16,12 +16,13 @@ model Patient {
   notes        String?
   createdAt    DateTime      @default(now())
   appointments Appointment[]
+  invoices     Invoice[]
 }
 
 model Appointment {
   id          String            @id @default(cuid())
   patientId   String
-  patient     Patient           @relation(fields: [patientId], references: [id])
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctorName  String
   startsAt    DateTime
   durationMin Int               @default(30)
@@ -30,6 +31,18 @@ model Appointment {
   createdAt   DateTime          @default(now())
 
   @@index([startsAt])
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  title     String
+  amount    Int
+  paid      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 enum AppointmentStatus {

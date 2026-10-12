@@ -1,8 +1,8 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { db } from "@/lib/db";
 
 function normalizePhone(raw: string) {
   let digits = raw.replace(/\D/g, "");
@@ -22,8 +22,9 @@ export async function createPatient(formData: FormData) {
     redirect("/patients/new?error=invalid");
   }
 
+  let id = "";
   try {
-    await db.patient.create({
+    const patient = await db.patient.create({
       data: {
         fullName,
         phone,
@@ -32,10 +33,12 @@ export async function createPatient(formData: FormData) {
         notes,
       },
     });
+    id = patient.id;
   } catch {
     redirect("/patients/new?error=duplicate");
   }
 
   revalidatePath("/patients");
-  redirect("/patients");
+  revalidatePath("/");
+  redirect(`/patients/${id}`);
 }
